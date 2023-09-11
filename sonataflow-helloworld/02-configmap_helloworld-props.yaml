@@ -1,7 +1,7 @@
 apiVersion: v1
 data:
   application.properties: |
-    kogito.service.url=http://greeting
+    kogito.service.url=http://helloworld
 
     # Data Index configuration
     mp.messaging.outgoing.kogito-processinstances-events.url=http://data-index-service-postgresql/processes
@@ -21,5 +21,5 @@ data:
 kind: ConfigMap
 metadata:
   labels:
-    app: greeting
-  name: greeting-props
+    app: helloworld
+  name: helloworld-props

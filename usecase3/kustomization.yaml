@@ -1,0 +1,3 @@
+resources:
+- ../dataindex_and_jobservice_platform
+- ../sonataflow-callbackstatetimeouts
