@@ -2,22 +2,48 @@
 
 Collection of artifacts to test SonataFlow Use Cases TP2.
 
-## Deploy Data Index locally
-
-Example of how to deploy Data Index on Kubernetes.
-
-### Prereqs
+## Prereqs for all the use cases
 
 1. Minikube installed
 2. kubectl installed
+3. SonataFlow operator installed if workflows are deployed
+
+## Use cases 
+
+This is the list of available use cases:
+
+| Use case                                                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                              |
+|----------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Deploy Data Index Locally](#deploy-data-index-locally)  | This use case deploys: <br/> * PostgreSQL Service<br/> * Data Index Service + postgresdb<br/>                                                                                                                                                                                                                                                                                                                                            |
+| [Use case 1](#use-case-1)                                | This use case deploys: <br/> * PostgreSQL Service<br/> * Data Index Service + postgresdb<br/> *  The `greeting` workflow (no persistence) configured to register the process events on the Data Index Service.                                                                                                                                                                                                                           |
+| [Use case 3](#use-case-3)                                | This use case deploys: <br/> * PostgreSQL Service<br/> * Data Index Service + postgresdb</br> * Jobs Service + postgresdb, configured to send the job events to the Data Index Service.<br/> * The `callbackstatetimeouts` configured to: <br/> &nbsp;&nbsp;&nbsp; - register process events on the Data Index Service<br/> &nbsp;&nbsp;&nbsp; - create timers in the Jobs Service|
+| [Use case 3](#use-case-3)                                | + uno <br/> + dos                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+
+
+> **NOTE:** To facilitate the switch between use cases, it's strongly recommended to install each use case in a dedicated namespace.
+
+## Deploy Data Index locally
+
+Example of how to deploy Data Index on Kubernetes that uses a Postgresql DB.
+
+> **NOTE:** The workflow related use cases that needs a data index service already includes this step.
 
 ### Procedure
 
-Open a terminal and run the following command:
+Open a terminal and run the following commands:
+
+Create the namespace
 
 ```shell
-kubectl kustomize dataindex | kubectl apply -f -
+kubectl create namespace data-index-usecase
+```
 
+```shell
+kubectl kustomize infra/dataindex | kubectl apply -f - -n data-index-usecase
+```
+
+```
 configmap/dataindex-properties-hg9ff8bff5 created
 secret/postgres-secrets-22tkgc2dt7 created
 service/data-index-service-postgresql created
@@ -27,54 +53,181 @@ deployment.apps/data-index-service-postgresql created
 deployment.apps/postgres created
 ```
 
-This will deploy a Data Index for you in the `default` namespace. Alternatively, you can pass `-n <namespace>` to deploy it in a specific namespace.
+This will deploy a Data Index for you in the `data-index-usecase` namespace. (If you don't use a namespace the `default` is used instead)
 Data Index will be backed by a Postgres Data Base deployment. **This setup is not intended for production environments** since this simple Postgres Deployment does not scale well. Please see the [Postgres Operator](https://github.com/zalando/postgres-operator) for more information.
+
+
+To check that the data index is running you can execute this command.
+
+```shell
+kubectl get pod -n data-index-usecase
+```
+
+```
+data-index-service-postgresql-5d76dc4468-69hm6   1/1     Running   1 (114s ago)   2m11s
+postgres-7f78499688-j6282                        1/1     Running   0              2m11s
+```
 
 To access the Data Index, using Minikube you can run:
 
 ```shell
-minikube service data-index-service-postgresql --url 
+minikube service data-index-service-postgresql --url -n data-index-usecase 
 ```
 
-The output is the Data Index URL, so you can access the GraphiQL UI.
+Example output:
+```
+http://192.168.49.2:30352
+```
+The output is the Data Index URL, so you can access the GraphiQL UI by using a url like this http://192.168.49.2:30352/grpahiql/  (host and por might be different in your installation.)
 
 For more information about Data Index and this deployment see [Data Index standalone service](https://sonataflow.org/serverlessworkflow/latest/data-index/data-index-service.html) in SonataFlow guides.
 
-## Deploy the SonataFlow Greeting example
+To clean the use case you can use this command:
 
-To feed Data Index with workflow execution data, you must deploy a SonataFlow instance and configure it to send events to Data Index.
+```shell
+kubectl delete namespace data-index-usecase
+```
 
-### Prereqs
+## Use case 1
 
-1. Install Data Index (see above)
-2. Install the SonataFlow Operator on Minikube; see the instructions in the [operator installation guide](https://sonataflow.org/serverlessworkflow/latest/cloud/operator/install-serverless-operator.html).
+This use case is intended to represent installation with:
+
+* A singleton Data Index Service 
+* The `greeting` workflow, that is configured to deliver events to the Data Index Service. 
 
 ### Procedure
 
-Open a new terminal and run:
+Open a terminal and run the following commands:
 
 ```shell
-kubectl apply -f sonataflow-greeting/
+kubectl create namespace usecase1
 ```
 
-It should build and deploy a new instance of the Greetings workflow in the same namespace where Data Index is deployed.
+Install the Data Index Service:
+```shell
+kubectl kustomize infra/dataindex | kubectl apply -f - -n usecase1
+```
 
-To access the application, run:
+```
+configmap/dataindex-properties-hg9ff8bff5 created
+secret/postgres-secrets-22tkgc2dt7 created
+service/data-index-service-postgresql created
+service/postgres created
+persistentvolumeclaim/postgres-pvc created
+deployment.apps/data-index-service-postgresql created
+deployment.apps/postgres created
+
+```
+
+Give some time for the data index to start, you can check that it's running by executing.
 
 ```shell
-kubectl patch svc greeting  -p '{"spec": {"type": "NodePort"}}'
-minikube service greeting --url
+kubectl get pod -n usecase1
 ```
 
-This should expose the workflow and return the public endpoint.
+```
+NAME                                             READY   STATUS    RESTARTS       AGE
+data-index-service-postgresql-5d76dc4468-lb259   1/1     Running   2 (113s ago)   2m11s
+postgres-7f78499688-lc8n6                        1/1     Running   0              2m11s
+```
 
-You can then use it to `curl` the REST endpoint and start a new workflow instance which will return immediately:
+Install the workflow:
+```shell
+ kubectl kustomize usecases/usecase1 | kubectl apply -f - -n usecase1
+ ```
+
+```
+configmap/greeting-props created
+sonataflow.sonataflow.org/greeting created
+sonataflowplatform.sonataflow.org/sonataflow-platform created
+```
+
+Give some time for the sonataflow operator to build and deploy the workflow. 
+To check that the workflow is ready you can use this command.
 
 ```shell
-curl -X POST -H 'Content-Type:application/json' -H 'Accept:application/json' -d '{"name": "John", "language": "English"}' http://${ENDPOINT}/greeting
+kubectl get workflow -n usecase1
 ```
 
-Replace `${ENDPOINT}` with the output from the previous command.
+```
+NAME       PROFILE   VERSION   URL   READY   REASON
+greeting             0.0.1           True    
+```
+
+## Use case 3
+
+### Procedure
+
+Open a terminal and run the following commands:
+
+```shell
+kubectl create namespace usecase3
+```
+
+Install the Data Index Service and the Jobs Service:
+```shell
+kubectl kustomize infra/dataindex_and_jobservice | kubectl apply -f - -n usecase3
+```
+
+```
+configmap/dataindex-properties-hg9ff8bff5 created
+configmap/jobs-service-properties-9bf9cg9b9f created
+secret/postgres-secrets-22tkgc2dt7 created
+service/data-index-service-postgresql created
+service/jobs-service-postgresql created
+service/postgres created
+persistentvolumeclaim/postgres-pvc created
+deployment.apps/data-index-service-postgresql created
+deployment.apps/jobs-service-postgresql created
+deployment.apps/postgres created
+```
+
+Give some time for the data index and the job service to start, you can check that it's running by executing.
+
+```shell
+kubectl get pod -n usecase3
+```
+
+```
+NAME                                             READY   STATUS    RESTARTS      AGE
+data-index-service-postgresql-5d76dc4468-2cshp   1/1     Running   0             63s
+jobs-service-postgresql-87587f9b5-r4twj          1/1     Running   2 (42s ago)   63s
+postgres-7f78499688-sc9rj                        1/1     Running   0             62s
+```
+
+Install the workflow:
+```shell
+ kubectl kustomize usecases/usecase3 | kubectl apply -f - -n usecase3
+ ```
+
+```
+configmap/callbackstatetimeouts-props created
+sonataflow.sonataflow.org/callbackstatetimeouts created
+sonataflowplatform.sonataflow.org/sonataflow-platform created
+```
+
+Give some time for the sonataflow operator to build and deploy the workflow.
+To check that the workflow is ready you can use this command.
+
+```shell
+kubectl get workflow -n usecase3
+```
+
+```
+NAME                    PROFILE   VERSION   URL   READY   REASON
+callbackstatetimeouts             0.0.1           False   WaitingForBuild   
+```
+
+Expose the workflow: 
+
+```shell
+kubectl patch svc callbackstatetimeouts  -p '{"spec": {"type": "NodePort"}}' -n usecase3
+```
+
+
+```shell
+curl -X POST -H 'Content-Type:application/json' -H 'Accept:application/json' -d '{}'     http://192.168.49.2:30707/callbackstatetimeouts
+```
 
 ## Querying Data Index
 

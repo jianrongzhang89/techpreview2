@@ -1,5 +1,0 @@
-resources:
-- ../dataindex_and_jobservice_platform
-- ../sonataflow-greeting
-- ../sonataflow-callbackstatetimeouts
-- ../sonataflow-workflowtimeouts

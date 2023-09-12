@@ -2,9 +2,6 @@ resources:
 - ../dataindex
 - 03-jobservice.yml
 
-generatorOptions:
-  disableNameSuffixHash: true
-
 configMapGenerator:
   - name: jobs-service-properties
     literals:
